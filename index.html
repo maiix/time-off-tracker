@@ -100,6 +100,7 @@ h3{font:700 15px/1.2 var(--f-display);margin:0 0 8px}
 .d.ov::after,.sw.s-ov::after{content:"";position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:2px;background:var(--focus)}
 .sw.s-ov{position:relative}
 .daycap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;flex-basis:100%;padding-top:10px;border-top:1px solid var(--line)}
+.daypanel.dock{margin:28px 0 0;z-index:10}
 .stepper.sm{margin:0;gap:8px}
 .stepper.sm button{width:28px;height:28px;font-size:16px}
 .stepper.sm button:disabled{opacity:.4;cursor:not-allowed}
@@ -168,6 +169,8 @@ details.done summary{cursor:pointer;font-weight:600;padding:6px 0}
 /* calendar */
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 18px;font-size:12.5px;color:var(--muted);align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:6px}
+.calsel{display:inline-flex;align-items:center;gap:8px;color:var(--fg);font-weight:600}
+.calsel select{font:500 13px var(--f-body);padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
 .sw{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line)}
 .sw.s-draft{background:var(--accent);border-color:var(--accent)}
 .sw.s-pen{border:1.5px dashed var(--fg)}
@@ -232,7 +235,7 @@ button.d:hover:not(:disabled){border-color:var(--fg)}
     <button type="button" id="v-employee" data-action="view" data-v="employee" aria-pressed="false">Employee view</button>
   </div>
   <button type="button" id="reset" class="link bar-reset" data-action="reset">Reset demo data</button>
-  <span class="bar-credit">Designed and built by <a href="mailto:grigor.cheitanov@bcaa.com">Grigor Cheitanov</a></span>
+  <span class="bar-credit">Designed and built by <a href="mailto:grigor.cheitanov@bcaa.com">Grigor Cheitanov</a> for BCAA</span>
 </div></div>
 <main class="wrap" id="app"></main>
 
@@ -351,6 +354,12 @@ var noteHtml=function(){return note?'<p class="note" role="status">'+esc(note)+'
 
 /* calendar */
 function vis(){return S.showOthers!==false}
+function calFilter(){
+  var f=S.calFilter;
+  if(!f||f==='all'||!emp(f))return null;
+  if(S.view==='employee'&&!vis())return null;
+  return f;
+}
 function hasOv(k){return !!(S.dayCap&&S.dayCap[k]!=null)}
 function capOf(k){return hasOv(k)?S.dayCap[k]:S.cap}
 function dayCapCtl(k,n){
@@ -409,6 +418,8 @@ function cell(m,d,mode){
   if(emode&&!vis()){ap=ap.filter(function(id){return id===S.me});pe=pe.filter(function(id){return id===S.me})}
   var mineA=emode&&ap.indexOf(S.me)>-1,mineP=emode&&pe.indexOf(S.me)>-1;
   var drafted=emode&&S.draft.indexOf(k)>-1;
+  var cf=calFilter();
+  if(cf){ap=ap.filter(function(id){return id===cf});pe=pe.filter(function(id){return id===cf})}
   var cls='d';
   if(full&&!mineA)cls+=' full';
   if(mineP)cls+=' mine-pen';
@@ -447,7 +458,11 @@ function calendar(mode){
 }
 function legend(mode){
   var h='<div class="legend">';
-  h+=S.emps.filter(function(e){return mode!=='emp'||vis()||e.id===S.me}).map(function(e){return '<span>'+dotHtml(e.id,0)+esc(nm(e.id))+'</span>'}).join('');
+  var people=S.emps.filter(function(e){return mode!=='emp'||vis()||e.id===S.me}),cf=calFilter();
+  if(people.length>1){
+    h+='<label class="calsel"><span>Show</span>'+(cf?dotHtml(cf,0):'')+'<select id="cal-filter"><option value="all"'+(cf?'':' selected')+'>All</option>'+
+      people.map(function(e){return '<option value="'+e.id+'"'+(cf===e.id?' selected':'')+'>'+esc(nm(e.id))+'</option>'}).join('')+'</select></label>';
+  }
   h+='<span><i class="dot" style="--pc:var(--fg)"></i>approved</span><span><i class="dot pen" style="--pc:var(--fg)"></i>pending</span>';
   if(mode==='emp')h+='<span><i class="sw s-draft"></i>your selection</span><span><i class="sw s-app"></i>your approved</span><span><i class="sw s-pen"></i>your pending</span>';
   h+='<span><i class="sw s-full"></i>full day</span><span><i class="sw s-hol"></i>stat holiday</span>';
@@ -503,10 +518,10 @@ function reqTable(list){
   return '<div class="card tbl-wrap"><table class="rt"><thead><tr><th>Person</th><th>Dates</th><th class="n">Days</th>'+subTh()+'<th>Status</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function dayPanel(){
-  if(!S.focus)return '<p class="muted small">Select a weekday to see who is away.</p>';
+  if(!S.focus)return '';
   var k=S.focus,ap=D.app[k]||[],pe=D.pen[k]||[];
   var li=ap.map(function(id){return '<li>'+dotHtml(id,0)+esc(emp(id).name)+' · approved</li>'}).concat(pe.map(function(id){return '<li>'+dotHtml(id,1)+esc(emp(id).name)+' · pending</li>'})).join('');
-  return '<div class="daypanel"><strong>'+fmtLong(k)+'</strong><span class="pill '+(ap.length>=capOf(k)?'declined':'approved')+'">'+ap.length+' of '+capOf(k)+' approved</span>'+(li?'<ul>'+li+'</ul>':'<span class="muted">Nobody is away.</span>')+dayCapCtl(k,ap.length)+'</div>';
+  return '<div class="daypanel dock" role="region" aria-label="Selected day"><strong>'+fmtLong(k)+'</strong><span class="pill '+(ap.length>=capOf(k)?'declined':'approved')+'">'+ap.length+' of '+capOf(k)+' approved</span>'+(li?'<ul>'+li+'</ul>':'<span class="muted">Nobody is away.</span>')+'<button type="button" class="mini" id="day-close" data-action="dayclose" style="margin-left:auto">Close</button>'+dayCapCtl(k,ap.length)+'</div>';
 }
 function manager(){
   var pend=S.reqs.filter(function(r){return r.status==='pending'}).sort(function(a,b){return a.days[0]<b.days[0]?-1:1});
@@ -539,7 +554,7 @@ function manager(){
   '</section></div></div>'+
   '<section class="sec" aria-label="Requests"><h2>Requests</h2>'+tabsHtml(pend.length,apprL.length,decL.length,tab)+noteHtml()+
   '<div role="tabpanel" id="req-panel" aria-labelledby="tab-'+tab+'">'+(shown.length?reqTable(shown):'<p class="empty">'+(tab==='pending'?'No requests waiting. New ones from your team appear here.':tab==='approved'?'No approved requests yet.':'No declined requests.')+'</p>')+'</div></section>'+
-  '<section class="sec" aria-label="Calendar"><h2>Calendar</h2>'+legend('mgr')+dayPanel()+calendar('mgr')+holList()+'</section>';
+  '<section class="sec" aria-label="Calendar"><h2>Calendar</h2>'+legend('mgr')+(S.focus?'':'<p class="muted small">Select a weekday to see who is away.</p>')+calendar('mgr')+holList()+dayPanel()+'</section>';
 }
 
 /* employee view */
@@ -616,6 +631,7 @@ document.addEventListener('click',function(ev){
   else if(a==='decline'){var r2=reqById(t.dataset.id);if(r2){r2.status='declined';commit()}}
   else if(a==='reopen'){var r3=reqById(t.dataset.id);if(r3){r3.status='pending';commit()}}
   else if(a==='sortsub'){S.sortSub=S.sortSub==='desc'?'asc':S.sortSub==='asc'?null:'desc';commit()}
+  else if(a==='dayclose'){S.focus=null;commit()}
   else if(a==='daycap'){
     var dk=S.focus;if(!dk)return;
     var nc=capOf(dk)+(+t.dataset.d);
@@ -651,6 +667,7 @@ document.addEventListener('submit',function(ev){
   gateErr='';S.me=e.id;S.draft=[];commit();
 });
 document.addEventListener('keydown',function(ev){
+  if(ev.key==='Escape'&&!addOpen&&S.view==='manager'&&S.focus){S.focus=null;commit();return}
   if(ev.key==='Escape'&&addOpen){
     addOpen=false;addErr='';addDraft=null;render();
     var ob=document.getElementById('add-open');if(ob)ob.focus();
@@ -658,6 +675,11 @@ document.addEventListener('keydown',function(ev){
 });
 document.addEventListener('change',function(ev){
   var t=ev.target;
+  if(t.id==='cal-filter'){
+    S.calFilter=t.value;commit();
+    var sel=document.getElementById('cal-filter');if(sel)sel.focus();
+    return;
+  }
   if(t.type==='number'&&t.dataset.emp){
     var e=emp(t.dataset.emp),floor=countBy(e.id);
     var v=parseInt(t.value,10);if(isNaN(v))v=e.allow;
